@@ -1,6 +1,5 @@
 const express = require("express");
 const cors = require("cors");
-const crypto = require("crypto");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -14,8 +13,6 @@ app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 // ─── STEAM OAUTH ───────────────────────────────────────────
-
-// Step 1: Redirect to Steam login
 app.get("/auth/steam", (req, res) => {
   const params = new URLSearchParams({
     "openid.ns": "http://specs.openid.net/auth/2.0",
@@ -28,16 +25,13 @@ app.get("/auth/steam", (req, res) => {
   res.redirect(`https://steamcommunity.com/openid/login?${params}`);
 });
 
-// Step 2: Steam redirects back here
 app.get("/auth/steam/callback", async (req, res) => {
   try {
     const claimed = req.query["openid.claimed_id"] || "";
     const steamIdMatch = claimed.match(/(\d+)$/);
     if (!steamIdMatch) return res.redirect(`${FRONTEND_URL}?auth_error=invalid`);
-
     const steamId = steamIdMatch[1];
 
-    // Verify with Steam
     const params = new URLSearchParams({ ...req.query, "openid.mode": "check_authentication" });
     const verifyRes = await fetch("https://steamcommunity.com/openid/login", {
       method: "POST",
@@ -49,7 +43,6 @@ app.get("/auth/steam/callback", async (req, res) => {
       return res.redirect(`${FRONTEND_URL}?auth_error=invalid`);
     }
 
-    // Get Steam profile
     let playerName = steamId;
     let playerAvatar = "";
     if (STEAM_API_KEY) {
@@ -59,17 +52,41 @@ app.get("/auth/steam/callback", async (req, res) => {
       const profileData = await profileRes.json();
       const player = profileData?.response?.players?.[0];
       if (player) {
-        playerName = player.personaname;
-        playerAvatar = player.avatarfull;
+        // Fix encoding: Steam API returns UTF-8, ensure correct decoding
+        playerName = player.personaname || steamId;
+        playerAvatar = player.avatarfull || "";
       }
     }
 
-    // Redirect back to frontend with user info
-    const token = Buffer.from(JSON.stringify({ steamId, playerName, playerAvatar })).toString("base64");
+    const token = Buffer.from(JSON.stringify({ steamId, playerName, playerAvatar })).toString("base64url");
     res.redirect(`${FRONTEND_URL}?token=${token}`);
   } catch (e) {
     console.error("Auth error:", e);
     res.redirect(`${FRONTEND_URL}?auth_error=server`);
+  }
+});
+
+// ─── DEBUG: raw match data ─────────────────────────────────
+app.get("/api/debug/matches/:steam_id", async (req, res) => {
+  try {
+    const r = await fetch(`${API_BASE}/v1/players/${req.params.steam_id}/match-history?limit=3`);
+    const text = await r.text();
+    res.setHeader("Content-Type", "application/json");
+    res.send(text);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
+  }
+});
+
+// ─── DEBUG: raw summary data ───────────────────────────────
+app.get("/api/debug/summary/:steam_id", async (req, res) => {
+  try {
+    const r = await fetch(`${API_BASE}/v1/players/${req.params.steam_id}/summary`);
+    const text = await r.text();
+    res.setHeader("Content-Type", "application/json");
+    res.send(text);
+  } catch (e) {
+    res.status(500).json({ ok: false, error: e.message });
   }
 });
 
@@ -115,19 +132,16 @@ app.get("/api/friends/:steam_id", async (req, res) => {
     const r = await fetch(
       `https://api.steampowered.com/ISteamUser/GetFriendList/v1/?key=${STEAM_API_KEY}&steamid=${req.params.steam_id}&relationship=friend`
     );
-    if (!r.ok) return res.status(200).json({ ok: true, data: [] }); // private profile
+    if (!r.ok) return res.json({ ok: true, data: [] });
     const data = await r.json();
     const friends = data?.friendslist?.friends || [];
-
-    // Get profiles for first 20 friends
     if (friends.length > 0) {
       const ids = friends.slice(0, 20).map(f => f.steamid).join(",");
       const profileRes = await fetch(
         `https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/?key=${STEAM_API_KEY}&steamids=${ids}`
       );
       const profileData = await profileRes.json();
-      const players = profileData?.response?.players || [];
-      res.json({ ok: true, data: players });
+      res.json({ ok: true, data: profileData?.response?.players || [] });
     } else {
       res.json({ ok: true, data: [] });
     }
@@ -229,6 +243,8 @@ app.get("/", (req, res) => {
     endpoints: [
       "GET /auth/steam",
       "GET /auth/steam/callback",
+      "GET /api/debug/matches/:steam_id",
+      "GET /api/debug/summary/:steam_id",
       "GET /api/search/:name",
       "GET /api/steam-profile/:steam_id",
       "GET /api/friends/:steam_id",
@@ -246,6 +262,4 @@ app.get("/", (req, res) => {
 app.listen(PORT, () => {
   console.log(`✅ Server läuft auf Port ${PORT}`);
   console.log(`🔑 Steam API Key: ${STEAM_API_KEY ? "gesetzt ✅" : "FEHLT ❌"}`);
-  console.log(`🌐 Frontend: ${FRONTEND_URL}`);
-  console.log(`🔗 Backend:  ${BACKEND_URL}`);
 });
