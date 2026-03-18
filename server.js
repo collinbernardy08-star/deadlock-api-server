@@ -3,24 +3,20 @@ const cors = require("cors");
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const BASE = "https://api.deadlock-api.com";
+const API_BASE = "https://api.deadlock-api.com";
+const ASSETS_BASE = "https://assets.deadlock-api.com";
 
-// Allow your GitHub Pages site to call this server
-app.use(cors({
-  origin: "*" // Later: replace with your GitHub Pages URL e.g. "https://deinname.github.io"
-}));
-
+app.use(cors({ origin: "*" }));
 app.use(express.json());
 
 // ─── HEROES ───────────────────────────────────────────────
 app.get("/api/heroes", async (req, res) => {
   try {
-    const r = await fetch(`${BASE}/v1/heroes?include_disabled=false`);
+    const r = await fetch(`${ASSETS_BASE}/v2/heroes`);
     const text = await r.text();
-    console.log("deadlock-api status:", r.status);
-    console.log("deadlock-api body:", text.substring(0, 500));
+    console.log("heroes status:", r.status);
     const data = JSON.parse(text);
-    res.json({ ok: true, source: "deadlock-api.com", data });
+    res.json({ ok: true, source: "assets.deadlock-api.com", data });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
   }
@@ -28,7 +24,7 @@ app.get("/api/heroes", async (req, res) => {
 
 app.get("/api/heroes/:id", async (req, res) => {
   try {
-    const r = await fetch(`${BASE}/v1/heroes/${req.params.id}`);
+    const r = await fetch(`${ASSETS_BASE}/v2/heroes/${req.params.id}`);
     if (!r.ok) return res.status(404).json({ ok: false, error: "Hero not found" });
     const data = await r.json();
     res.json({ ok: true, data });
@@ -40,8 +36,10 @@ app.get("/api/heroes/:id", async (req, res) => {
 // ─── META / STATS ──────────────────────────────────────────
 app.get("/api/meta/heroes", async (req, res) => {
   try {
-    const r = await fetch(`${BASE}/v3/analytics/hero-stats`);
-    const data = await r.json();
+    const r = await fetch(`${API_BASE}/v3/analytics/hero-stats`);
+    const text = await r.text();
+    console.log("meta/heroes status:", r.status);
+    const data = JSON.parse(text);
     res.json({ ok: true, data });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
@@ -51,7 +49,7 @@ app.get("/api/meta/heroes", async (req, res) => {
 // ─── PLAYER ───────────────────────────────────────────────
 app.get("/api/players/:steam_id", async (req, res) => {
   try {
-    const r = await fetch(`${BASE}/v1/players/${req.params.steam_id}/summary`);
+    const r = await fetch(`${API_BASE}/v1/players/${req.params.steam_id}/summary`);
     if (!r.ok) return res.status(404).json({ ok: false, error: "Player not found" });
     const data = await r.json();
     res.json({ ok: true, data });
@@ -63,7 +61,7 @@ app.get("/api/players/:steam_id", async (req, res) => {
 app.get("/api/players/:steam_id/matches", async (req, res) => {
   try {
     const limit = req.query.limit || 20;
-    const r = await fetch(`${BASE}/v1/players/${req.params.steam_id}/match-history?limit=${limit}`);
+    const r = await fetch(`${API_BASE}/v1/players/${req.params.steam_id}/match-history?limit=${limit}`);
     if (!r.ok) return res.status(404).json({ ok: false, error: "Player not found" });
     const data = await r.json();
     res.json({ ok: true, data });
@@ -75,7 +73,7 @@ app.get("/api/players/:steam_id/matches", async (req, res) => {
 // ─── MATCHES ──────────────────────────────────────────────
 app.get("/api/matches/:id", async (req, res) => {
   try {
-    const r = await fetch(`${BASE}/v1/matches/${req.params.id}`);
+    const r = await fetch(`${API_BASE}/v1/matches/${req.params.id}`);
     if (!r.ok) return res.status(404).json({ ok: false, error: "Match not found" });
     const data = await r.json();
     res.json({ ok: true, data });
@@ -88,8 +86,10 @@ app.get("/api/matches/:id", async (req, res) => {
 app.get("/api/leaderboard", async (req, res) => {
   try {
     const region = req.query.region || "Europe";
-    const r = await fetch(`${BASE}/v1/leaderboard?region=${region}`);
-    const data = await r.json();
+    const r = await fetch(`${API_BASE}/v1/leaderboard?region=${region}`);
+    const text = await r.text();
+    console.log("leaderboard status:", r.status);
+    const data = JSON.parse(text);
     res.json({ ok: true, data });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
