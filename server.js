@@ -16,7 +16,10 @@ app.use(express.json());
 app.get("/api/heroes", async (req, res) => {
   try {
     const r = await fetch(`${BASE}/v1/heroes?include_disabled=false`);
-    const data = await r.json();
+    const text = await r.text();
+    console.log("deadlock-api status:", r.status);
+    console.log("deadlock-api body:", text.substring(0, 500));
+    const data = JSON.parse(text);
     res.json({ ok: true, source: "deadlock-api.com", data });
   } catch (e) {
     res.status(500).json({ ok: false, error: e.message });
